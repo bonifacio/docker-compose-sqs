@@ -1,0 +1,44 @@
+version: "3.9"
+services:
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "127.0.0.1:53:53"                # only required for Pro (DNS)
+      - "127.0.0.1:53:53/udp"            # only required for Pro (DNS)
+      - "127.0.0.1:443:443"              # only required for Pro (LocalStack HTTPS Edge Proxy)
+      - "127.0.0.1:4510-4559:4510-4559"  # external service port range
+      - "127.0.0.1:4566:4566"            # LocalStack Edge Proxy
+    environment:
+      - AWS_DEFAULT_REGION=sa-east-1
+      - AWS_ACCESS_KEY_ID=fake
+      - AWS_SECRET_ACCESS_KEY=fake
+      - DEFAULT_REGION=sa-east-1
+      - DEBUG=${DEBUG-}
+      - DATA_DIR=${DATA_DIR-}
+      - LAMBDA_EXECUTOR=${LAMBDA_EXECUTOR-}
+      - LOCALSTACK_API_KEY=${LOCALSTACK_API_KEY-}  # only required for Pro
+      - HOST_TMP_FOLDER=${TMPDIR:-/tmp/}localstack
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+  awscli:
+    image: amazon/aws-cli
+    entrypoint: /bin/sh -c
+    command: >
+      'aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name fila3 &&\
+       aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name fila2 --attributes file://sqs-attributes/fila2.json &&\
+       aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name fila1 --attributes file://sqs-attributes/fila1.json &&\
+       aws --endpoint-url=http://localstack:4566 sqs list-queues &&\
+       aws --endpoint-url=http://localstack:4566 sqs get-queue-attributes --queue-url http://localhost:4566/000000000000/fila1 --attribute-names All &&\
+       aws --endpoint-url=http://localstack:4566 sqs get-queue-attributes --queue-url http://localhost:4566/000000000000/fila2 --attribute-names All &&\
+       aws --endpoint-url=http://localstack:4566 sqs get-queue-attributes --queue-url http://localhost:4566/000000000000/fila3 --attribute-names All'
+    restart: on-failure
+    environment:
+      - AWS_ACCESS_KEY_ID=fake
+      - AWS_SECRET_ACCESS_KEY=fake
+      - AWS_DEFAULT_REGION=sa-east-1
+    depends_on:
+      - localstack
+    volumes:
+      - "./sqs-attributes:/aws/sqs-attributes"
